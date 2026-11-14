@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waiting Board</title>
+<style>
+  :root {
+    --bg: #0b1220; --panel: #111a2e; --row-a: #131d33; --row-b: #0f182b; --line: #22304d;
+    --text: #eef2f8; --muted: #8fa0bf; --accent: #38bdf8;
+    --wait: #cbd5e1; --due: #fbbf24; --ready: #22c55e;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { height: 100%; background: var(--bg); color: var(--text); font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; overflow: hidden; cursor: none; }
+  body { display: flex; flex-direction: column; font-size: 1.6vw; }
+
+  header { display: flex; align-items: center; justify-content: space-between; padding: 1.2vw 2.4vw; background: var(--panel); border-bottom: 2px solid var(--line); }
+  header h1 { font-size: 2.2vw; font-weight: 700; letter-spacing: .01em; }
+  header .sub { color: var(--muted); font-size: 1.2vw; margin-top: .2vw; }
+  #clock { font-size: 2.6vw; font-variant-numeric: tabular-nums; font-weight: 600; }
+
+  .cols, .row { display: grid; grid-template-columns: 16% 1fr 20% 22%; align-items: center; padding: 0 2.4vw; column-gap: 1.5vw; }
+  .cols { color: var(--muted); font-size: 1.1vw; text-transform: uppercase; letter-spacing: .12em; padding-top: 1vw; padding-bottom: 1vw; border-bottom: 1px solid var(--line); }
+  .cols .r, .row .time { text-align: right; }
+
+  #viewport { flex: 1; overflow: hidden; position: relative; }
+  #list { will-change: transform; }
+  .row { min-height: 5.2vw; border-bottom: 1px solid var(--line); }
+  .row.a { background: var(--row-a); } .row.b { background: var(--row-b); }
+  .row.first { border-top: 3px solid var(--line); }
+  .ticket { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; font-size: 2.4vw; font-weight: 700; letter-spacing: .12em; color: var(--accent); }
+  .test { font-size: 1.9vw; font-weight: 600; }
+  .test small { display: block; color: var(--muted); font-size: 1.05vw; font-weight: 400; }
+  .time { font-size: 2.5vw; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .pill { justify-self: end; font-size: 1.15vw; font-weight: 700; padding: .45vw 1.1vw; border-radius: 999px; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
+  .waiting .pill { background: #1e293b; color: var(--wait); }
+  .due .pill { background: rgba(251,191,36,.15); color: var(--due); }
+  .due .time { color: var(--due); }
+  .ready { background: rgba(34,197,94,.12) !important; }
+  .ready .pill { background: var(--ready); color: #052e14; }
+  .ready .time { color: var(--ready); }
+
+  #empty { position: absolute; inset: 0; display: none; place-items: center; text-align: center; color: var(--muted); font-size: 2vw; }
+  #empty b { display: block; color: var(--text); font-size: 3vw; margin-bottom: 1vw; }
+
+  footer { padding: 1vw 2.4vw; background: var(--panel); border-top: 2px solid var(--line); color: var(--muted); font-size: 1.25vw; display: flex; justify-content: space-between; gap: 2vw; }
+  #conn { white-space: nowrap; }
+  #conn.off { color: #f87171; }
+
+  #qr { position: fixed; inset: 0; background: var(--bg); display: flex; align-items: center; justify-content: center; gap: 5vw; opacity: 0; pointer-events: none; transition: opacity .8s; }
+  #qr.show { opacity: 1; }
+  #qr .code { background: #fff; padding: 1.5vw; border-radius: 1.2vw; width: 30vw; height: 30vw; }
+  #qr .code img { width: 100%; height: 100%; display: block; }
+  #qr h2 { font-size: 4vw; line-height: 1.1; margin-bottom: 1.5vw; }
+  #qr p { font-size: 1.9vw; color: var(--muted); max-width: 40vw; line-height: 1.45; margin-bottom: 1vw; }
+  #qr .url { font-family: ui-monospace, Menlo, Consolas, monospace; color: var(--accent); font-size: 1.6vw; }
+</style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1 id="labName">Laboratory</h1>
+      <div class="sub">Waiting times for results · find your ID below</div>
+    </div>
+    <div id="clock">--:--</div>
+  </header>
+  <div class="cols"><span>Your ID</span><span>Test</span><span class="r">Time left</span><span class="r">Status</span></div>
+  <div id="viewport">
+    <div id="list"></div>
+    <div id="empty"><div><b>No one is waiting right now</b>Ask at reception if you'd like to wait for your results.</div></div>
+  </div>
+  <footer><span id="ticker"></span><span id="conn">● Live</span></footer>
+
+  <div id="qr" aria-hidden="true">
+    <div class="code"><img id="qrImg" alt="QR code"></div>
+    <div>
+      <h2>Track your results<br>on your phone</h2>
+      <p>Scan the code and enter the ID on your slip. You'll see all your tests and the time left, even if you step out.</p>
+      <div class="url" id="qrUrl"></div>
+    </div>
+  </div>
+
+<script src="/common.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+const viewport = $('viewport'), list = $('list');
+let rows = [], settings = { scrollSpeed: 40, qrSeconds: 15 };
+
+const STATUS_LABEL = { waiting: 'In progress', due: 'Finalising', ready: 'Ready ✓' };
+
+function render() {
+  let group = 0, last = null;
+  list.innerHTML = rows.map((r) => {
+    const first = r.ticket !== last;
+    if (first) { group++; last = r.ticket; }
+    const name = r.name && r.name !== r.code ? `<small>${esc(r.name)}</small>` : '';
+    return `<div class="row ${group % 2 ? 'a' : 'b'} ${first ? 'first' : ''}" data-due="${r.dueAt}" data-ready="${r.readyAt || ''}">
+      <span class="ticket">${esc(r.ticket)}</span>
+      <span class="test">${esc(r.code)}${name}</span>
+      <span class="time"></span>
+      <span class="pill"></span>
+    </div>`;
+  }).join('');
+  $('empty').style.display = rows.length ? 'none' : 'grid';
+  tick();
+}
+
+function tick() {
+  $('clock').textContent = fmtClock(nowMs());
+  for (const el of list.children) {
+    const t = { dueAt: +el.dataset.due, readyAt: el.dataset.ready ? +el.dataset.ready : null };
+    const st = liveStatus(t);
+    el.classList.remove('waiting', 'due', 'ready');
+    el.classList.add(st);
+    el.querySelector('.time').textContent = st === 'ready' ? 'Collect' : st === 'due' ? 'Any moment' : fmtRemaining(t.dueAt - nowMs());
+    el.querySelector('.pill').textContent = STATUS_LABEL[st];
+  }
+}
+
+async function refresh() {
+  try {
+    const data = await api('GET', '/api/board');
+    syncClock(data.now);
+    rows = data.rows;
+    settings = data.settings;
+    $('labName').textContent = settings.labName;
+    $('ticker').textContent = settings.tickerMessage;
+    $('qrUrl').textContent = data.trackUrl.replace(/^https?:\/\//, '');
+    if (!$('qrImg').src) $('qrImg').src = '/qr.svg';
+    $('conn').className = '';
+    $('conn').textContent = '● Live';
+    render();
+  } catch (e) {
+    $('conn').className = 'off';
+    $('conn').textContent = '● Reconnecting…';
+  }
+}
+
+// ---- scroll loop: pause at top → scroll to end → pause → QR screen → back to top ----
+let offset = 0, phase = 'top', phaseUntil = performance.now() + 5000, lastT = performance.now();
+function frame(t) {
+  const dt = (t - lastT) / 1000; lastT = t;
+  const max = Math.max(0, list.scrollHeight - viewport.clientHeight);
+  if (offset > max) offset = max;
+  switch (phase) {
+    case 'top':
+      // If everything fits on one screen, hold it longer before showing the QR.
+      if (t > phaseUntil) { phase = max > 0 ? 'scroll' : 'bottom'; phaseUntil = t + (max > 0 ? 0 : 12000); }
+      break;
+    case 'scroll':
+      offset += settings.scrollSpeed * (window.innerWidth / 1920) * dt;
+      if (offset >= max) { offset = max; phase = 'bottom'; phaseUntil = t + 4000; }
+      break;
+    case 'bottom':
+      if (t > phaseUntil) { $('qr').classList.add('show'); phase = 'qr'; phaseUntil = t + settings.qrSeconds * 1000; }
+      break;
+    case 'qr':
+      if (t > phaseUntil) { $('qr').classList.remove('show'); offset = 0; phase = 'top'; phaseUntil = t + 5000; }
+      break;
+  }
+  list.style.transform = `translateY(${-offset}px)`;
+  requestAnimationFrame(frame);
+}
+
+refresh();
+onLiveChange(refresh);
+setInterval(tick, 1000);
+requestAnimationFrame(frame);
+// Reload once a day to pick up any app updates on a TV that is never touched.
+setTimeout(() => location.reload(), 24 * 3600e3);
+</script>
+</body>
+</html>

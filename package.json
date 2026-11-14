@@ -1,0 +1,21 @@
+{
+  "name": "lab-waiting-board",
+  "version": "0.1.0",
+  "description": "Anonymous waiting-time board for a lab reception TV, with staff registration and patient QR tracking",
+  "main": "server.js",
+  "directories": {
+    "lib": "lib"
+  },
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "UNLICENSED",
+  "dependencies": {
+    "express": "^4.22.3",
+    "qrcode": "^1.5.4"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "private": true
+}

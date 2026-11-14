@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Waiting Board Staff</title>
+<style>
+  :root { --bg: #f4f6fa; --card: #fff; --text: #0f172a; --muted: #64748b; --line: #e2e8f0; --accent: #0369a1; --accent-soft: #e0f2fe; --due: #b45309; --due-bg: #fef3c7; --ready: #15803d; --ready-bg: #dcfce7; --danger: #dc2626; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  header { display: flex; align-items: center; gap: 16px; padding: 12px 20px; background: var(--card); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+  header h1 { font-size: 18px; margin: 0; margin-right: auto; }
+  nav button { background: none; color: var(--muted); border: 0; padding: 8px 12px; border-radius: 8px; font-weight: 600; cursor: pointer; font-size: 15px; }
+  nav button.on { background: var(--accent-soft); color: var(--accent); }
+  main { padding: 20px; max-width: 1280px; margin: 0 auto; }
+  .grid { display: grid; grid-template-columns: minmax(300px, 420px) 1fr; gap: 20px; align-items: start; }
+  @media (max-width: 860px) { .grid { grid-template-columns: 1fr; } }
+  .panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px; }
+  .panel h2 { font-size: 16px; margin: 0 0 4px; }
+  .hint { color: var(--muted); font-size: 13px; margin: 0 0 12px; }
+  input, select { font: inherit; padding: 9px 11px; border: 1px solid var(--line); border-radius: 9px; background: var(--card); color: var(--text); width: 100%; }
+  input:focus { outline: 2px solid var(--accent); border-color: transparent; }
+  button { font: inherit; font-weight: 600; cursor: pointer; border-radius: 9px; border: 1px solid var(--line); background: var(--card); color: var(--text); padding: 8px 12px; }
+  button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  button.primary:disabled { opacity: .45; cursor: default; }
+  button.small { padding: 4px 9px; font-size: 13px; }
+  button.danger { color: var(--danger); }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; max-height: 360px; overflow: auto; }
+  .chip { border-radius: 999px; padding: 7px 12px; font-weight: 600; }
+  .chip small { color: var(--muted); font-weight: 400; margin-left: 4px; }
+  .chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .chip.on small { color: #e0f2fe; }
+  .selected { font-size: 13px; color: var(--muted); min-height: 20px; margin-bottom: 10px; }
+  .visit { border: 1px solid var(--line); border-radius: 12px; padding: 12px; margin-top: 12px; }
+  .visit-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .ticket { font: 700 22px ui-monospace, Menlo, Consolas, monospace; letter-spacing: .12em; color: var(--accent); }
+  .visit-head .muted { color: var(--muted); font-size: 13px; margin-right: auto; }
+  .trow { display: grid; grid-template-columns: 1fr 110px 90px auto; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px dashed var(--line); margin-top: 8px; }
+  .trow .time { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
+  .st { white-space: nowrap; font-size: 12px; font-weight: 700; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; text-align: center; background: var(--line); color: var(--muted); }
+  .due .st { background: var(--due-bg); color: var(--due); } .due .time { color: var(--due); }
+  .ready .st { background: var(--ready-bg); color: var(--ready); } .ready .time { color: var(--ready); }
+  .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+  @media (max-width: 560px) { .trow { grid-template-columns: 1fr auto; } .trow .actions { grid-column: 1 / -1; justify-content: flex-start; } }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+  th { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+  td input { padding: 6px 8px; }
+  .row-off td { opacity: .5; }
+  .form-row { display: grid; gap: 6px; margin-bottom: 14px; }
+  .form-row label { font-weight: 600; font-size: 13px; }
+  .empty { color: var(--muted); padding: 24px 0; text-align: center; }
+  .err { color: var(--danger); font-size: 14px; min-height: 18px; }
+  .links a { color: var(--accent); }
+
+  #login { max-width: 340px; margin: 12vh auto; }
+  dialog { border: 0; border-radius: 16px; padding: 24px; max-width: 420px; width: calc(100% - 32px); }
+  dialog::backdrop { background: rgba(15,23,42,.5); }
+  .slip { text-align: center; }
+  .slip .big { font: 800 56px ui-monospace, Menlo, Consolas, monospace; letter-spacing: .15em; color: var(--accent); margin: 4px 0 8px; }
+  .slip img { width: 170px; height: 170px; }
+  .slip ul { list-style: none; padding: 0; margin: 10px 0; text-align: left; }
+  .slip li { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px dashed var(--line); }
+  .slip .fine { font-size: 12px; color: var(--muted); }
+  .dlg-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
+  @media print {
+    body > *:not(dialog) { display: none !important; }
+    dialog { position: static; box-shadow: none; padding: 0; max-width: 72mm; }
+    dialog::backdrop { display: none; }
+    .dlg-actions { display: none; }
+    .slip .big { color: #000; }
+  }
+</style>
+</head>
+<body>
+<section id="login" class="panel" hidden>
+  <h2>Staff sign in</h2>
+  <p class="hint">Enter the lab's staff PIN.</p>
+  <form id="loginForm"><input id="pin" type="password" inputmode="numeric" autocomplete="current-password" placeholder="PIN"><div class="err" id="loginErr"></div><button class="primary" style="width:100%">Sign in</button></form>
+</section>
+
+<div id="app" hidden>
+  <header>
+    <h1 id="title">Waiting board · Staff</h1>
+    <nav><button data-tab="queue" class="on">Waiting list</button><button data-tab="tests">Tests &amp; turnaround</button><button data-tab="settings">Settings</button></nav>
+    <button class="small" id="logout">Sign out</button>
+  </header>
+  <main>
+    <section data-panel="queue" class="grid">
+      <div class="panel">
+        <h2>Register a waiting patient</h2>
+        <p class="hint">Only for patients who opt in to wait. Do not enter names or hospital numbers. The system gives them an anonymous ID.</p>
+        <input id="search" placeholder="Search tests…" autocomplete="off">
+        <div class="chips" id="chips"></div>
+        <div class="selected" id="selected">No tests selected</div>
+        <button class="primary" id="register" disabled style="width:100%">Register &amp; issue ID</button>
+        <div class="err" id="regErr"></div>
+      </div>
+      <div class="panel">
+        <h2>Currently waiting <span id="count" class="hint"></span></h2>
+        <p class="hint">Mark tests ready when results are out. Ready tests stay on the TV for a while and then drop off automatically.</p>
+        <div id="visits"></div>
+      </div>
+    </section>
+
+    <section data-panel="tests" class="panel" hidden>
+      <h2>Tests &amp; default turnaround times</h2>
+      <p class="hint">The turnaround time (TAT) is used to calculate the countdown when a test is registered. Changes affect new registrations only. Untick "Active" to hide a test from the list.</p>
+      <table><thead><tr><th>Short name (shown on TV)</th><th>Full name</th><th style="width:120px">TAT (min)</th><th style="width:70px">Active</th><th style="width:90px"></th></tr></thead><tbody id="catalog"></tbody></table>
+      <div class="err" id="catErr"></div>
+    </section>
+
+    <section data-panel="settings" class="panel" hidden style="max-width:640px">
+      <h2>Settings</h2>
+      <form id="settingsForm">
+        <div class="form-row"><label>Lab name (shown on the TV)</label><input name="labName"></div>
+        <div class="form-row"><label>Public web address for the QR code</label><input name="publicUrl" placeholder="https://your-lab-board.example.com"><span class="hint">Leave empty to use the address the TV opened. Set it if the TV uses a local address that phones can't reach.</span></div>
+        <div class="form-row"><label>Message at the bottom of the TV</label><input name="tickerMessage"></div>
+        <div class="form-row"><label>Scroll speed (pixels per second on a 1080p TV)</label><input name="scrollSpeed" type="number" min="10" max="200"></div>
+        <div class="form-row"><label>Seconds to show the QR code after each scroll</label><input name="qrSeconds" type="number" min="5" max="120"></div>
+        <div class="form-row"><label>Minutes a ready test stays on the TV</label><input name="readyDisplayMinutes" type="number" min="1" max="240"></div>
+        <div class="form-row"><label>Delete every entry this many hours after registration</label><input name="purgeHours" type="number" min="1" max="72"></div>
+        <button class="primary">Save settings</button> <span id="savedMsg" class="hint"></span>
+      </form>
+      <p class="hint links" style="margin-top:20px">TV screen: <a href="/display" target="_blank">/display</a> · Patient tracking: <a href="/t" target="_blank">/t</a></p>
+    </section>
+  </main>
+</div>
+
+<dialog id="slipDlg">
+  <div class="slip">
+    <div class="fine" id="slipLab"></div>
+    <div>Your waiting ID</div>
+    <div class="big" id="slipTicket"></div>
+    <ul id="slipTests"></ul>
+    <img id="slipQr" alt="QR code to track results">
+    <div class="fine">Scan to track your results on your phone,<br>or watch the screen in the waiting area.<br>Times are estimates.</div>
+  </div>
+  <div class="dlg-actions"><button onclick="window.print()">Print slip</button><button class="primary" onclick="slipDlg.close()">Done</button></div>
+</dialog>
+
+<dialog id="addDlg">
+  <h2 style="margin-top:0">Add tests to <span id="addTicket" class="ticket"></span></h2>
+  <div class="chips" id="addChips"></div>
+  <div class="dlg-actions"><button onclick="addDlg.close()">Cancel</button><button class="primary" id="addSave">Add</button></div>
+</dialog>
+
+<script src="/common.js"></script>
+<script>
+const $ = (id) => document.getElementById(id);
+let state = null;
+const picked = new Set();
+const STATUS_LABEL = { waiting: 'In progress', due: 'Overdue', ready: 'Ready' };
+
+// ---------- auth ----------
+async function refresh() {
+  try {
+    state = await api('GET', '/api/staff/state');
+    syncClock(state.now);
+    $('login').hidden = true; $('app').hidden = false;
+    renderAll();
+  } catch (e) {
+    if (e.status === 401) { $('app').hidden = true; $('login').hidden = false; $('pin').focus(); }
+  }
+}
+$('loginForm').onsubmit = async (e) => {
+  e.preventDefault();
+  try { await api('POST', '/api/login', { pin: $('pin').value }); $('pin').value = ''; $('loginErr').textContent = ''; refresh(); }
+  catch (err) { $('loginErr').textContent = err.message; }
+};
+$('logout').onclick = async () => { await api('POST', '/api/logout'); location.reload(); };
+
+// ---------- tabs ----------
+document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
+  document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
+  document.querySelectorAll('[data-panel]').forEach((p) => p.hidden = p.dataset.panel !== b.dataset.tab);
+  if (b.dataset.tab === 'settings') fillSettings();
+});
+
+function renderAll() {
+  $('title').textContent = state.settings.labName + ' · Waiting board';
+  renderChips(); renderVisits();
+  if (!document.querySelector('[data-panel="tests"]').contains(document.activeElement)) renderCatalog();
+}
+
+// ---------- registration ----------
+const activeTests = () => state.catalog.filter((c) => c.active);
+const fmtTat = (m) => m >= 60 ? `${Math.floor(m / 60)}h${m % 60 ? ' ' + (m % 60) + 'm' : ''}` : `${m}m`;
+function chipHtml(c, on) { return `<button type="button" class="chip ${on ? 'on' : ''}" data-id="${c.id}" title="${esc(c.name)}">${esc(c.code)}<small>${fmtTat(c.tatMinutes)}</small></button>`; }
+
+function renderChips() {
+  const q = $('search').value.trim().toLowerCase();
+  for (const id of [...picked]) if (!activeTests().some((c) => c.id === id)) picked.delete(id);
+  $('chips').innerHTML = activeTests().filter((c) => picked.has(c.id) || !q || (c.code + ' ' + c.name).toLowerCase().includes(q)).map((c) => chipHtml(c, picked.has(c.id))).join('');
+  const sel = activeTests().filter((c) => picked.has(c.id));
+  $('selected').textContent = sel.length ? `Selected: ${sel.map((c) => c.code).join(', ')}` : 'No tests selected';
+  $('register').disabled = !sel.length;
+}
+$('chips').onclick = (e) => {
+  const b = e.target.closest('.chip'); if (!b) return;
+  picked.has(b.dataset.id) ? picked.delete(b.dataset.id) : picked.add(b.dataset.id);
+  renderChips();
+};
+$('search').oninput = renderChips;
+$('search').onkeydown = (e) => {
+  if (e.key !== 'Enter') return;
+  const first = $('chips').querySelector('.chip:not(.on)');
+  if (first) { picked.add(first.dataset.id); $('search').value = ''; renderChips(); }
+};
+
+$('register').onclick = async () => {
+  $('register').disabled = true;
+  try {
+    const r = await api('POST', '/api/staff/visits', { catalogIds: [...picked] });
+    picked.clear(); $('search').value = ''; $('regErr').textContent = '';
+    $('slipLab').textContent = state.settings.labName;
+    $('slipTicket').textContent = r.ticket;
+    $('slipTests').innerHTML = r.tests.map((t) => `<li><span>${esc(t.code)}</span><span>about ${fmtClock(t.dueAt)}</span></li>`).join('');
+    $('slipQr').src = '/qr.svg?ticket=' + r.ticket;
+    $('slipDlg').showModal();
+    await refresh();
+  } catch (e) { $('regErr').textContent = e.message; renderChips(); }
+};
+
+// ---------- waiting list ----------
+function renderVisits() {
+  const vs = [...state.visits].sort((a, b) => b.createdAt - a.createdAt);
+  $('count').textContent = vs.length ? `(${vs.length})` : '';
+  $('visits').innerHTML = vs.length ? vs.map((v) => `<div class="visit">
+    <div class="visit-head"><span class="ticket">${esc(v.ticket)}</span><span class="muted">registered ${fmtClock(v.createdAt)}</span>
+      <button class="small" data-act="add" data-t="${v.ticket}">+ Test</button>
+      <button class="small" data-act="slip" data-t="${v.ticket}">Slip</button>
+      <button class="small danger" data-act="remove" data-t="${v.ticket}">Remove</button></div>
+    ${v.tests.map((t) => `<div class="trow" data-due="${t.dueAt}" data-ready="${t.readyAt || ''}">
+      <span><b>${esc(t.code)}</b> <span class="hint">· TAT ${fmtTat(t.tatMinutes)}</span></span>
+      <span class="st"></span><span class="time"></span>
+      <span class="actions">
+        ${t.readyAt ? `<button class="small" data-act="unready" data-t="${v.ticket}" data-x="${t.id}">Undo ready</button>`
+          : `<button class="small primary" data-act="ready" data-t="${v.ticket}" data-x="${t.id}">Ready ✓</button>
+             <button class="small" data-act="extend" data-t="${v.ticket}" data-x="${t.id}" title="Add 15 minutes">+15m</button>`}
+        <button class="small danger" data-act="deltest" data-t="${v.ticket}" data-x="${t.id}" title="Remove this test">✕</button>
+      </span></div>`).join('')}</div>`).join('') : '<div class="empty">No one is waiting.</div>';
+  tick();
+}
+function tick() {
+  document.querySelectorAll('.trow').forEach((el) => {
+    const t = { dueAt: +el.dataset.due, readyAt: el.dataset.ready ? +el.dataset.ready : null };
+    const st = liveStatus(t);
+    el.classList.remove('waiting', 'due', 'ready'); el.classList.add(st);
+    el.querySelector('.st').textContent = STATUS_LABEL[st];
+    el.querySelector('.time').textContent = st === 'ready' ? fmtClock(t.readyAt) : st === 'due' ? '+' + fmtRemaining(nowMs() - t.dueAt) : fmtRemaining(t.dueAt - nowMs());
+  });
+}
+
+let addingTo = null; const addPicked = new Set();
+$('visits').onclick = async (e) => {
+  const b = e.target.closest('button[data-act]'); if (!b) return;
+  const { act, t, x } = b.dataset;
+  const base = `/api/staff/visits/${t}`;
+  try {
+    if (act === 'ready') await api('POST', `${base}/tests/${x}/ready`, { ready: true });
+    if (act === 'unready') await api('POST', `${base}/tests/${x}/ready`, { ready: false });
+    if (act === 'extend') await api('POST', `${base}/tests/${x}/extend`, { minutes: 15 });
+    if (act === 'deltest' && confirm('Remove this test from the board?')) await api('DELETE', `${base}/tests/${x}`);
+    if (act === 'remove' && confirm(`Remove ${t} from the board? Do this when the patient has collected their results or left.`)) await api('DELETE', base);
+    if (act === 'slip') {
+      const v = state.visits.find((v) => v.ticket === t);
+      $('slipLab').textContent = state.settings.labName; $('slipTicket').textContent = t;
+      $('slipTests').innerHTML = v.tests.map((t) => `<li><span>${esc(t.code)}</span><span>about ${fmtClock(t.dueAt)}</span></li>`).join('');
+      $('slipQr').src = '/qr.svg?ticket=' + t; $('slipDlg').showModal(); return;
+    }
+    if (act === 'add') {
+      addingTo = t; addPicked.clear(); $('addTicket').textContent = t; renderAddChips(); $('addDlg').showModal(); return;
+    }
+    refresh();
+  } catch (err) { alert(err.message); }
+};
+function renderAddChips() { $('addChips').innerHTML = activeTests().map((c) => chipHtml(c, addPicked.has(c.id))).join(''); }
+$('addChips').onclick = (e) => { const b = e.target.closest('.chip'); if (!b) return; addPicked.has(b.dataset.id) ? addPicked.delete(b.dataset.id) : addPicked.add(b.dataset.id); renderAddChips(); };
+$('addSave').onclick = async () => { if (addPicked.size) await api('POST', `/api/staff/visits/${addingTo}/tests`, { catalogIds: [...addPicked] }); $('addDlg').close(); refresh(); };
+
+// ---------- catalog ----------
+function renderCatalog() {
+  $('catalog').innerHTML = state.catalog.map((c) => `<tr data-id="${c.id}" class="${c.active ? '' : 'row-off'}">
+    <td><input name="code" value="${esc(c.code)}"></td><td><input name="name" value="${esc(c.name)}"></td>
+    <td><input name="tatMinutes" type="number" min="1" value="${c.tatMinutes}"></td>
+    <td><input name="active" type="checkbox" ${c.active ? 'checked' : ''} style="width:auto"></td>
+    <td><button class="small" data-save>Save</button></td></tr>`).join('') +
+    `<tr data-id=""><td><input name="code" placeholder="e.g. CRP"></td><td><input name="name" placeholder="C-Reactive Protein"></td>
+    <td><input name="tatMinutes" type="number" min="1" placeholder="60"></td><td></td><td><button class="small primary" data-save>Add</button></td></tr>`;
+}
+$('catalog').onclick = async (e) => {
+  if (!e.target.matches('[data-save]')) return;
+  const tr = e.target.closest('tr'), f = (n) => tr.querySelector(`[name=${n}]`);
+  const body = { code: f('code').value, name: f('name').value, tatMinutes: f('tatMinutes').value, active: f('active') ? f('active').checked : true };
+  try {
+    tr.dataset.id ? await api('PUT', '/api/staff/catalog/' + tr.dataset.id, body) : await api('POST', '/api/staff/catalog', body);
+    $('catErr').textContent = ''; e.target.blur(); await refresh(); renderCatalog();
+  } catch (err) { $('catErr').textContent = err.message; }
+};
+
+// ---------- settings ----------
+function fillSettings() { const f = $('settingsForm'); for (const [k, v] of Object.entries(state.settings)) if (f[k]) f[k].value = v; }
+$('settingsForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const body = Object.fromEntries(new FormData(e.target));
+  try { await api('PUT', '/api/staff/settings', body); $('savedMsg').textContent = 'Saved'; setTimeout(() => $('savedMsg').textContent = '', 2000); refresh(); }
+  catch (err) { $('savedMsg').textContent = err.message; }
+};
+
+refresh();
+onLiveChange(() => { if (!$('app').hidden) refresh(); });
+setInterval(tick, 1000);
+</script>
+</body>
+</html>
