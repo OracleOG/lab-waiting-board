@@ -1,0 +1,10 @@
+{
+  "cleanUrls": true,
+  "redirects": [{ "source": "/", "destination": "/display", "permanent": false }],
+  "rewrites": [
+    { "source": "/api/(.*)", "destination": "/api" },
+    { "source": "/qr.svg", "destination": "/api" },
+    { "source": "/t", "destination": "/track" },
+    { "source": "/t/:ticket", "destination": "/track" }
+  ]
+}

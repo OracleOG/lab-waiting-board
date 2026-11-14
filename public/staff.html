@@ -7,6 +7,7 @@
 <style>
   :root { --bg: #f4f6fa; --card: #fff; --text: #0f172a; --muted: #64748b; --line: #e2e8f0; --accent: #0369a1; --accent-soft: #e0f2fe; --due: #b45309; --due-bg: #fef3c7; --ready: #15803d; --ready-bg: #dcfce7; --danger: #dc2626; }
   * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
   body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
   header { display: flex; align-items: center; gap: 16px; padding: 12px 20px; background: var(--card); border-bottom: 1px solid var(--line); flex-wrap: wrap; }
   header h1 { font-size: 18px; margin: 0; margin-right: auto; }
@@ -38,7 +39,12 @@
   .trow { display: grid; grid-template-columns: 1fr 110px 90px auto; gap: 8px; align-items: center; padding: 8px 0; border-top: 1px dashed var(--line); margin-top: 8px; }
   .trow .time { font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; }
   .st { white-space: nowrap; font-size: 12px; font-weight: 700; text-transform: uppercase; padding: 3px 8px; border-radius: 999px; text-align: center; background: var(--line); color: var(--muted); }
-  .due .st { background: var(--due-bg); color: var(--due); } .due .time { color: var(--due); }
+  .stat-cards { display: flex; gap: 12px; flex-wrap: wrap; margin: 12px 0 20px; }
+  .stat-cards div { flex: 1; min-width: 140px; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
+  .stat-cards b { display: block; font-size: 26px; }
+  .stat-cards span { color: var(--muted); font-size: 13px; }
+  td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .late { color: var(--due); font-weight: 600; }
   .ready .st { background: var(--ready-bg); color: var(--ready); } .ready .time { color: var(--ready); }
   .actions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
   @media (max-width: 560px) { .trow { grid-template-columns: 1fr auto; } .trow .actions { grid-column: 1 / -1; justify-content: flex-start; } }
@@ -82,7 +88,7 @@
 <div id="app" hidden>
   <header>
     <h1 id="title">Waiting board · Staff</h1>
-    <nav><button data-tab="queue" class="on">Waiting list</button><button data-tab="tests">Tests &amp; turnaround</button><button data-tab="settings">Settings</button></nav>
+    <nav><button data-tab="queue" class="on">Waiting list</button><button data-tab="tests">Tests &amp; turnaround</button><button data-tab="stats">Daily stats</button><button data-tab="settings">Settings</button></nav>
     <button class="small" id="logout">Sign out</button>
   </header>
   <main>
@@ -98,7 +104,7 @@
       </div>
       <div class="panel">
         <h2>Currently waiting <span id="count" class="hint"></span></h2>
-        <p class="hint">Mark tests ready when results are out. Ready tests stay on the TV for a while and then drop off automatically.</p>
+        <p class="hint">Tests turn <b>Ready</b> by themselves when their turnaround time is up. If a result is delayed, press <b>+15m</b>. If it's out early, press <b>Ready now</b>. Ready tests drop off the TV after a while.</p>
         <div id="visits"></div>
       </div>
     </section>
@@ -110,6 +116,18 @@
       <div class="err" id="catErr"></div>
     </section>
 
+    <section data-panel="stats" class="panel" hidden>
+      <h2>Daily statistics</h2>
+      <p class="hint">Counts and times only. No patient data is kept. A patient is counted when they leave the board. "Delayed" means staff pressed +15m. "Early" means staff pressed Ready now.</p>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><label class="hint" style="margin:0">Period</label>
+        <select id="statRange" style="width:auto"><option value="1">Today</option><option value="7" selected>Last 7 days</option><option value="30">Last 30 days</option><option value="365">Last 12 months</option></select></div>
+      <div class="stat-cards" id="statCards"></div>
+      <h2 style="margin-top:8px">By test</h2>
+      <table><thead><tr><th>Test</th><th class="num">Count</th><th class="num">Set TAT (avg)</th><th class="num">Actual (avg)</th><th class="num">Delayed</th><th class="num">Early</th></tr></thead><tbody id="statTests"></tbody></table>
+      <h2 style="margin-top:20px">By day</h2>
+      <table><thead><tr><th>Date</th><th class="num">Patients</th><th class="num">Tests</th><th class="num">Delayed</th></tr></thead><tbody id="statDays"></tbody></table>
+    </section>
+
     <section data-panel="settings" class="panel" hidden style="max-width:640px">
       <h2>Settings</h2>
       <form id="settingsForm">
@@ -119,6 +137,8 @@
         <div class="form-row"><label>Scroll speed (pixels per second on a 1080p TV)</label><input name="scrollSpeed" type="number" min="10" max="200"></div>
         <div class="form-row"><label>Seconds to show the QR code after each scroll</label><input name="qrSeconds" type="number" min="5" max="120"></div>
         <div class="form-row"><label>Minutes a ready test stays on the TV</label><input name="readyDisplayMinutes" type="number" min="1" max="240"></div>
+        <div class="form-row"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="sound" style="width:auto"> Chime on the TV when a result becomes ready</label><span class="hint">Browsers only allow sound after someone presses a key or clicks on the TV page once. A TV remote's OK button counts.</span></div>
+        <div class="form-row"><label>Timezone (for daily stats)</label><input name="timezone" placeholder="Africa/Lagos"></div>
         <div class="form-row"><label>Delete every entry this many hours after registration</label><input name="purgeHours" type="number" min="1" max="72"></div>
         <button class="primary">Save settings</button> <span id="savedMsg" class="hint"></span>
       </form>
@@ -150,7 +170,7 @@
 const $ = (id) => document.getElementById(id);
 let state = null;
 const picked = new Set();
-const STATUS_LABEL = { waiting: 'In progress', due: 'Overdue', ready: 'Ready' };
+const STATUS_LABEL = { waiting: 'In progress', ready: 'Ready' };
 
 // ---------- auth ----------
 async function refresh() {
@@ -175,6 +195,7 @@ document.querySelectorAll('nav button').forEach((b) => b.onclick = () => {
   document.querySelectorAll('nav button').forEach((x) => x.classList.toggle('on', x === b));
   document.querySelectorAll('[data-panel]').forEach((p) => p.hidden = p.dataset.panel !== b.dataset.tab);
   if (b.dataset.tab === 'settings') fillSettings();
+  if (b.dataset.tab === 'stats') loadStats();
 });
 
 function renderAll() {
@@ -235,9 +256,9 @@ function renderVisits() {
       <span><b>${esc(t.code)}</b> <span class="hint">· TAT ${fmtTat(t.tatMinutes)}</span></span>
       <span class="st"></span><span class="time"></span>
       <span class="actions">
-        ${t.readyAt ? `<button class="small" data-act="unready" data-t="${v.ticket}" data-x="${t.id}">Undo ready</button>`
-          : `<button class="small primary" data-act="ready" data-t="${v.ticket}" data-x="${t.id}">Ready ✓</button>
-             <button class="small" data-act="extend" data-t="${v.ticket}" data-x="${t.id}" title="Add 15 minutes">+15m</button>`}
+        ${t.readyAt ? `<button class="small" data-act="unready" data-t="${v.ticket}" data-x="${t.id}" title="Go back to the turnaround-time countdown">Undo</button>`
+          : `<button class="small primary rn" data-act="ready" data-t="${v.ticket}" data-x="${t.id}" title="Result is out early">Ready now</button>`}
+        <button class="small" data-act="extend" data-t="${v.ticket}" data-x="${t.id}" title="Result delayed: add 15 minutes">+15m</button>
         <button class="small danger" data-act="deltest" data-t="${v.ticket}" data-x="${t.id}" title="Remove this test">✕</button>
       </span></div>`).join('')}</div>`).join('') : '<div class="empty">No one is waiting.</div>';
   tick();
@@ -246,9 +267,10 @@ function tick() {
   document.querySelectorAll('.trow').forEach((el) => {
     const t = { dueAt: +el.dataset.due, readyAt: el.dataset.ready ? +el.dataset.ready : null };
     const st = liveStatus(t);
-    el.classList.remove('waiting', 'due', 'ready'); el.classList.add(st);
+    el.classList.remove('waiting', 'ready'); el.classList.add(st);
     el.querySelector('.st').textContent = STATUS_LABEL[st];
-    el.querySelector('.time').textContent = st === 'ready' ? fmtClock(t.readyAt) : st === 'due' ? '+' + fmtRemaining(nowMs() - t.dueAt) : fmtRemaining(t.dueAt - nowMs());
+    el.querySelector('.time').textContent = st === 'ready' ? fmtClock(readyTime(t)) : fmtRemaining(t.dueAt - nowMs());
+    const rn = el.querySelector('.rn'); if (rn) rn.hidden = st === 'ready';
   });
 }
 
@@ -300,16 +322,46 @@ $('catalog').onclick = async (e) => {
 };
 
 // ---------- settings ----------
-function fillSettings() { const f = $('settingsForm'); for (const [k, v] of Object.entries(state.settings)) if (f[k]) f[k].value = v; }
+function fillSettings() { const f = $('settingsForm'); for (const [k, v] of Object.entries(state.settings)) if (f[k]) f[k].type === 'checkbox' ? (f[k].checked = !!v) : (f[k].value = v); }
 $('settingsForm').onsubmit = async (e) => {
   e.preventDefault();
   const body = Object.fromEntries(new FormData(e.target));
+  body.sound = e.target.sound.checked;
   try { await api('PUT', '/api/staff/settings', body); $('savedMsg').textContent = 'Saved'; setTimeout(() => $('savedMsg').textContent = '', 2000); refresh(); }
   catch (err) { $('savedMsg').textContent = err.message; }
 };
 
+// ---------- stats ----------
+const fmtMin = (m) => !isFinite(m) ? '–' : m >= 60 ? `${Math.floor(m / 60)}h ${String(Math.round(m % 60)).padStart(2, '0')}m` : `${Math.round(m)}m`;
+async function loadStats() {
+  const r = await api('GET', '/api/staff/stats');
+  const days = +$('statRange').value;
+  const cutoff = new Date(r.today + 'T00:00:00Z'); cutoff.setUTCDate(cutoff.getUTCDate() - days + 1);
+  const keys = Object.keys(r.days).filter((k) => k >= cutoff.toISOString().slice(0, 10)).sort().reverse();
+  const byTest = {}; let patients = 0, tests = 0, delayed = 0, target = 0, actual = 0;
+  for (const k of keys) {
+    const d = r.days[k]; patients += d.patients;
+    for (const [code, s] of Object.entries(d.tests)) {
+      const b = (byTest[code] = byTest[code] || { n: 0, targetMin: 0, actualMin: 0, delayed: 0, early: 0 });
+      for (const f in b) b[f] += s[f] || 0;
+      tests += s.n; delayed += s.delayed; target += s.targetMin; actual += s.actualMin;
+    }
+  }
+  $('statCards').innerHTML = `<div><b>${patients}</b><span>patients waited</span></div><div><b>${tests}</b><span>tests</span></div>
+    <div><b>${tests ? Math.round(100 * (tests - delayed) / tests) + '%' : '–'}</b><span>on time (not delayed)</span></div>
+    <div><b>${fmtMin(actual / tests)}</b><span>average wait per test (set: ${fmtMin(target / tests)})</span></div>
+    <div><b>${r.waitingNow}</b><span>on the board now (not yet counted)</span></div>`;
+  $('statTests').innerHTML = Object.entries(byTest).sort((a, b) => b[1].n - a[1].n).map(([code, s]) =>
+    `<tr><td><b>${esc(code)}</b></td><td class="num">${s.n}</td><td class="num">${fmtMin(s.targetMin / s.n)}</td><td class="num ${s.actualMin > s.targetMin + 1 ? 'late' : ''}">${fmtMin(s.actualMin / s.n)}</td><td class="num">${s.delayed}</td><td class="num">${s.early}</td></tr>`).join('')
+    || '<tr><td colspan="6" class="empty">No data for this period yet.</td></tr>';
+  $('statDays').innerHTML = keys.map((k) => { const d = r.days[k]; const ts = Object.values(d.tests);
+    return `<tr><td>${k}</td><td class="num">${d.patients}</td><td class="num">${ts.reduce((a, s) => a + s.n, 0)}</td><td class="num">${ts.reduce((a, s) => a + s.delayed, 0)}</td></tr>`; }).join('')
+    || '<tr><td colspan="4" class="empty">No data yet.</td></tr>';
+}
+$('statRange').onchange = loadStats;
+
 refresh();
-onLiveChange(() => { if (!$('app').hidden) refresh(); });
+onLiveChange(() => { if (!$('app').hidden) refresh(); }, 10000);
 setInterval(tick, 1000);
 </script>
 </body>

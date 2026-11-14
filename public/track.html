@@ -26,7 +26,8 @@
   .right { text-align: right; flex-shrink: 0; }
   .time { font-size: 24px; font-weight: 700; font-variant-numeric: tabular-nums; }
   .pill { display: inline-block; margin-top: 4px; font-size: 12px; font-weight: 700; padding: 3px 10px; border-radius: 999px; text-transform: uppercase; letter-spacing: .05em; background: var(--line); color: var(--muted); }
-  .due .time, .due .pill { color: var(--due); } .due .pill { background: var(--due-bg); }
+  .card.flash { animation: flash 1s ease-in-out infinite alternate; }
+  @keyframes flash { from { box-shadow: 0 0 0 0 rgba(34,197,94,.0); } to { box-shadow: 0 0 0 4px rgba(34,197,94,.6); } }
   .ready .time { color: var(--ready); } .ready .pill { background: var(--ready); color: #fff; }
   .summary { margin-top: 20px; padding: 14px 16px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); font-size: 15px; }
   .summary.all-ready { background: var(--ready-bg); border-color: transparent; font-weight: 600; }
@@ -51,8 +52,8 @@
 <script src="/common.js"></script>
 <script>
 const $ = (id) => document.getElementById(id);
-const STATUS_LABEL = { waiting: 'In progress', due: 'Finalising', ready: 'Ready' };
-let current = null, data = null;
+const STATUS_LABEL = { waiting: 'In progress', ready: 'Ready' };
+let current = null, data = null, readyCount = -1;
 
 function store(k, v) { try { v === undefined ? localStorage.removeItem(k) : localStorage.setItem(k, v); } catch (e) {} }
 function recall(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
@@ -63,6 +64,7 @@ async function load(ticket) {
   try {
     data = await api('GET', '/api/track/' + encodeURIComponent(ticket));
     syncClock(data.now);
+    if (current !== data.ticket) readyCount = -1;
     current = data.ticket;
     $('err').textContent = '';
     $('id').value = current;
@@ -94,18 +96,23 @@ function tick() {
     const st = liveStatus(t);
     if (st === 'ready') ready++;
     latest = Math.max(latest, t.dueAt);
-    el.className = 'card ' + st;
-    el.querySelector('.time').textContent = st === 'ready' ? 'Ready' : st === 'due' ? 'Any moment' : fmtRemaining(t.dueAt - nowMs());
+    el.className = 'card ' + st + (st === 'ready' && nowMs() - readyTime(t) < 120e3 ? ' flash' : '');
+    el.querySelector('.time').textContent = st === 'ready' ? 'Ready' : fmtRemaining(t.dueAt - nowMs());
     el.querySelector('.pill').textContent = STATUS_LABEL[st];
-    el.querySelector('.due-at').textContent = st === 'ready' ? 'Ready since ' + fmtClock(t.readyAt) : 'Expected about ' + fmtClock(t.dueAt);
+    el.querySelector('.due-at').textContent = st === 'ready' ? 'Ready since ' + fmtClock(readyTime(t)) : 'Expected about ' + fmtClock(t.dueAt);
   }
+  // Alert when another result becomes ready while the page is open.
+  if (readyCount >= 0 && ready > readyCount) { chime(); try { navigator.vibrate && navigator.vibrate([300, 150, 300]); } catch (e) {} }
+  readyCount = ready;
+  document.title = ready ? `(${ready}/${n} ready) Track My Results` : 'Track My Results';
   const n = data.tests.length, s = $('summary');
   s.className = 'summary' + (ready === n ? ' all-ready' : '');
   s.textContent = ready === n ? 'All your results are ready. Please come to the reception counter.'
-    : `${ready} of ${n} ready · last result expected about ${fmtClock(latest)}`;
+    : `${ready} of ${n} ready · last result expected about ${fmtClock(latest)}. Keep this page open to get a sound alert.`;
 }
 
-$('f').onsubmit = (e) => { e.preventDefault(); load($('id').value); };
+$('f').onsubmit = (e) => { e.preventDefault(); const c = audio(); if (c) c.resume(); load($('id').value); };
+['click', 'touchstart'].forEach((ev) => window.addEventListener(ev, () => { const c = audio(); if (c) c.resume(); }, { once: true }));
 $('other').onclick = () => { current = null; data = null; store('lastTicket'); $('out').hidden = true; $('id').value = ''; $('id').focus(); history.replaceState(null, '', '/t'); };
 
 const fromPath = location.pathname.split('/')[2];

@@ -19,12 +19,21 @@ When a patient chooses to wait for results, staff register them here. The system
 ## How it works
 
 - **Registration:** staff pick the tests. Each test gets a countdown based on its default turnaround time (TAT), which is set in *Tests & turnaround*. The TATs included are placeholders, so the lab should set its own.
-- **Statuses:** *In progress* (counting down), then *Finalising* (time is up but the test isn't marked ready yet; the screen never shows negative times), then *Ready ✓* (staff marked it; the patient should come to the counter).
-- **Staff actions:** Ready ✓, +15 min (for a delay), add or remove a test, remove the patient, and reprint the slip.
+- **The system works off the turnaround time:** each test counts down and turns **Ready ✓** by itself when its time is up. When a test becomes ready, the TV shows a big green "Results ready" banner with the ID and test, plays a chime, and the row flashes for 2 minutes. A patient's phone page also chimes and vibrates if it is open.
+- **Staff corrections:** **+15m** when a result is delayed, **Ready now** when it's out early, add or remove a test, remove the patient, and reprint the slip.
+- **Daily stats:** patients who waited, tests per day, the average actual wait compared with the set turnaround time, and the number of delayed/early tests. Only counts are stored, never patient data.
 - **Automatic cleanup:** ready tests leave the TV after 30 minutes. Every entry is deleted 12 hours after registration. Both times can be changed in Settings.
-- **Live updates:** the TV and phones update immediately when staff make a change (Server-Sent Events, with polling as a backup).
+- **Updates:** countdowns run on each screen. Screens check for staff changes every 10–15 seconds.
+- **Sound on the TV:** browsers only allow sound after one key press or click on the page. A TV remote's OK button works. For a kiosk PC, start Chrome with `--autoplay-policy=no-user-gesture-required --kiosk https://…/display`.
 
-## Run
+## Deploy on Vercel
+
+1. Import this repo into Vercel. No framework or build settings are needed.
+2. **Storage → Create / Connect → Upstash for Redis** (the free plan is enough) and connect it to the project. This sets `KV_REST_API_URL` and `KV_REST_API_TOKEN`.
+3. **Settings → Environment Variables:** add `STAFF_PIN`, and optionally `SESSION_SECRET` (a long random string).
+4. Redeploy. Open `/display` on the TV and `/staff` at reception.
+
+## Run locally
 
 ```bash
 npm install
@@ -35,7 +44,9 @@ Environment variables:
 
 - `STAFF_PIN`: staff login PIN. **Set this.** The default is 1234.
 - `PORT`: default 3000.
-- `DATA_DIR`: where `data.json` is kept. Default `./data`.
+- `DATA_DIR`: where `data.json` is kept when Redis isn't configured. Default `./data`.
+- `KV_REST_API_URL` / `KV_REST_API_TOKEN` (or `UPSTASH_REDIS_REST_URL` / `UPSTASH_REDIS_REST_TOKEN`): Upstash Redis. Required on Vercel.
+- `LAB_TIMEZONE`: default timezone for daily stats. Default `Africa/Lagos`. Can be changed in Settings.
 - `SESSION_SECRET`: optional.
 
 Docker: `docker build -t lab-board . && docker run -p 3000:3000 -e STAFF_PIN=xxxx -v labdata:/data lab-board`

@@ -34,11 +34,21 @@
   .time { font-size: 2.5vw; font-weight: 700; font-variant-numeric: tabular-nums; }
   .pill { justify-self: end; font-size: 1.15vw; font-weight: 700; padding: .45vw 1.1vw; border-radius: 999px; text-transform: uppercase; letter-spacing: .06em; white-space: nowrap; }
   .waiting .pill { background: #1e293b; color: var(--wait); }
-  .due .pill { background: rgba(251,191,36,.15); color: var(--due); }
-  .due .time { color: var(--due); }
   .ready { background: rgba(34,197,94,.12) !important; }
   .ready .pill { background: var(--ready); color: #052e14; }
   .ready .time { color: var(--ready); }
+  .row.flash { animation: flash 1s ease-in-out infinite alternate; }
+  @keyframes flash { from { background: rgba(34,197,94,.12); } to { background: rgba(34,197,94,.45); } }
+
+  #announce { position: fixed; left: 0; right: 0; top: 0; z-index: 10; background: var(--ready); color: #052e14; padding: 2.2vw 3vw; transform: translateY(-110%); transition: transform .5s; box-shadow: 0 1vw 3vw rgba(0,0,0,.5); }
+  #announce.show { transform: none; animation: pulse 1s ease-in-out infinite alternate; }
+  @keyframes pulse { from { background: #22c55e; } to { background: #4ade80; } }
+  #announce .lbl { font-size: 1.6vw; font-weight: 700; text-transform: uppercase; letter-spacing: .1em; }
+  #announce .items { display: flex; flex-wrap: wrap; gap: 1vw 3vw; margin-top: .6vw; }
+  #announce .it { font-size: 3.4vw; font-weight: 800; }
+  #announce .it span { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; letter-spacing: .1em; margin-right: 1vw; }
+  #announce .msg { font-size: 1.5vw; margin-top: .6vw; font-weight: 600; }
+  #soundHint { position: fixed; right: 1.5vw; bottom: 5vw; z-index: 11; background: #1e293b; color: var(--muted); font-size: 1.1vw; padding: .6vw 1vw; border-radius: .6vw; display: none; }
 
   #empty { position: absolute; inset: 0; display: none; place-items: center; text-align: center; color: var(--muted); font-size: 2vw; }
   #empty b { display: block; color: var(--text); font-size: 3vw; margin-bottom: 1vw; }
@@ -71,6 +81,9 @@
   </div>
   <footer><span id="ticker"></span><span id="conn">● Live</span></footer>
 
+  <div id="announce" role="alert"><div class="lbl">✓ Results ready</div><div class="items" id="annItems"></div><div class="msg">Please come to the reception counter.</div></div>
+  <div id="soundHint">Press any key or click to turn on sound</div>
+
   <div id="qr" aria-hidden="true">
     <div class="code"><img id="qrImg" alt="QR code"></div>
     <div>
@@ -86,7 +99,9 @@ const $ = (id) => document.getElementById(id);
 const viewport = $('viewport'), list = $('list');
 let rows = [], settings = { scrollSpeed: 40, qrSeconds: 15 };
 
-const STATUS_LABEL = { waiting: 'In progress', due: 'Finalising', ready: 'Ready ✓' };
+const STATUS_LABEL = { waiting: 'In progress', ready: 'Ready ✓' };
+const prevStatus = new Map(); // test id -> last seen status, to detect the moment a test becomes ready
+let primed = false;
 
 function render() {
   let group = 0, last = null;
@@ -94,7 +109,7 @@ function render() {
     const first = r.ticket !== last;
     if (first) { group++; last = r.ticket; }
     const name = r.name && r.name !== r.code ? `<small>${esc(r.name)}</small>` : '';
-    return `<div class="row ${group % 2 ? 'a' : 'b'} ${first ? 'first' : ''}" data-due="${r.dueAt}" data-ready="${r.readyAt || ''}">
+    return `<div class="row ${group % 2 ? 'a' : 'b'} ${first ? 'first' : ''}" data-id="${r.id}" data-ticket="${esc(r.ticket)}" data-code="${esc(r.code)}" data-due="${r.dueAt}" data-ready="${r.readyAt || ''}">
       <span class="ticket">${esc(r.ticket)}</span>
       <span class="test">${esc(r.code)}${name}</span>
       <span class="time"></span>
@@ -107,15 +122,39 @@ function render() {
 
 function tick() {
   $('clock').textContent = fmtClock(nowMs());
+  const newlyReady = [];
   for (const el of list.children) {
     const t = { dueAt: +el.dataset.due, readyAt: el.dataset.ready ? +el.dataset.ready : null };
     const st = liveStatus(t);
-    el.classList.remove('waiting', 'due', 'ready');
+    const prev = prevStatus.get(el.dataset.id);
+    if (primed && st === 'ready' && prev !== 'ready' && nowMs() - readyTime(t) < 120e3) newlyReady.push(el.dataset);
+    prevStatus.set(el.dataset.id, st);
+    el.classList.remove('waiting', 'ready');
     el.classList.add(st);
-    el.querySelector('.time').textContent = st === 'ready' ? 'Collect' : st === 'due' ? 'Any moment' : fmtRemaining(t.dueAt - nowMs());
+    // flash for 2 minutes after becoming ready
+    el.classList.toggle('flash', st === 'ready' && nowMs() - readyTime(t) < 120e3);
+    el.querySelector('.time').textContent = st === 'ready' ? 'Collect' : fmtRemaining(t.dueAt - nowMs());
     el.querySelector('.pill').textContent = STATUS_LABEL[st];
   }
+  if (newlyReady.length) announce(newlyReady);
 }
+
+// ---- "Results ready" banner + chime ----
+let annTimer = null, annList = [];
+function announce(items) {
+  annList = [...annList, ...items].slice(-6);
+  $('annItems').innerHTML = annList.map((d) => `<div class="it"><span>${esc(d.ticket)}</span>${esc(d.code)}</div>`).join('');
+  $('announce').classList.add('show');
+  if (settings.sound !== false) { chime(); setTimeout(chime, 2500); }
+  clearTimeout(annTimer);
+  annTimer = setTimeout(() => { $('announce').classList.remove('show'); annList = []; }, 15000);
+}
+// Browsers only allow sound after a click or key press. A TV remote's OK button counts.
+// (For an unattended TV, Chrome can be started with --autoplay-policy=no-user-gesture-required.)
+function enableSound() { const c = audio(); if (c) c.resume().then(updateSoundHint); }
+function updateSoundHint() { const c = audio(); $('soundHint').style.display = settings.sound !== false && c && c.state !== 'running' ? 'block' : 'none'; }
+['click', 'keydown', 'touchstart'].forEach((ev) => window.addEventListener(ev, enableSound));
+setInterval(updateSoundHint, 5000);
 
 async function refresh() {
   try {
@@ -130,6 +169,8 @@ async function refresh() {
     $('conn').className = '';
     $('conn').textContent = '● Live';
     render();
+    primed = true;
+    updateSoundHint();
   } catch (e) {
     $('conn').className = 'off';
     $('conn').textContent = '● Reconnecting…';
@@ -163,7 +204,7 @@ function frame(t) {
 }
 
 refresh();
-onLiveChange(refresh);
+onLiveChange(refresh, 10000);
 setInterval(tick, 1000);
 requestAnimationFrame(frame);
 // Reload once a day to pick up any app updates on a TV that is never touched.
