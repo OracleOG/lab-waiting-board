@@ -111,14 +111,16 @@ staff.get('/state', h(async (req, res) => {
     now: n,
     catalog: db.catalog,
     settings: db.settings,
-    visits: db.visits.map((v) => ({ ticket: v.ticket, createdAt: v.createdAt, tests: v.tests.map((t) => ({ ...publicTest(t, n), tatMinutes: t.tatMinutes, startedAt: t.startedAt })) })),
+    visits: db.visits.map((v) => ({ ticket: v.ticket, createdAt: v.createdAt, pid: v.pid || '', phone: v.phone || '', tests: v.tests.map((t) => ({ ...publicTest(t, n), tatMinutes: t.tatMinutes, startedAt: t.startedAt })) })),
   });
 }));
 
 staff.post('/visits', h(async (req, res) => {
   const ids = Array.isArray(req.body.catalogIds) ? req.body.catalogIds : [];
+  const pid = String(req.body.pid || '').trim().slice(0, 40);
+  const phone = String(req.body.phone || '').replace(/[^\d+\-\s()]/g, '').trim().slice(0, 25);
   const r = await store.mutate((db) => {
-    const v = store.createVisit(db, ids);
+    const v = store.createVisit(db, ids, { pid, phone });
     return { ticket: v.ticket, trackUrl: baseUrl(req, db) + '/t/' + v.ticket, tests: v.tests };
   });
   res.json(r);
@@ -154,6 +156,42 @@ staff.post('/visits/:ticket/tests/:testId/extend', withTest((db, v, t, req) => {
   const minutes = Math.max(1, Math.min(480, Number(req.body.minutes) || 15));
   t.dueAt = Math.max(t.dueAt, Date.now()) + minutes * 60e3;
   t.readyAt = null;
+}));
+
+// Update a patient's PID / phone.
+staff.put('/visits/:ticket/contact', h(async (req, res) => {
+  await store.mutate((db) => {
+    const v = store.findVisit(db, req.params.ticket);
+    if (!v) throw httpError(404, 'Not found');
+    v.pid = String(req.body.pid || '').trim().slice(0, 40);
+    v.phone = String(req.body.phone || '').replace(/[^\d+\-\s()]/g, '').trim().slice(0, 25);
+  });
+  res.json({ ok: true });
+}));
+
+// Bulk delay. scope: 'all' (every test still counting down), 'code' (every test of one type,
+// e.g. all FBC), 'visit' (all of one patient's tests). Tests already marked ready are left alone.
+staff.post('/delay', h(async (req, res) => {
+  const { scope, code, ticket } = req.body;
+  const minutes = Math.round(Number(req.body.minutes));
+  if (!(minutes >= 1 && minutes <= 480)) throw httpError(400, 'Minutes must be between 1 and 480');
+  if (!['all', 'code', 'visit'].includes(scope)) throw httpError(400, 'Unknown scope');
+  const count = await store.mutate((db) => {
+    const n = Date.now();
+    let changed = 0;
+    for (const v of db.visits) {
+      if (scope === 'visit' && v.ticket !== ticket) continue;
+      for (const t of v.tests) {
+        if (t.readyAt) continue;
+        if (scope === 'code' && t.code !== code) continue;
+        if (scope !== 'visit' && n >= t.dueAt) continue; // bulk delays skip tests whose time is already up
+        t.dueAt = Math.max(t.dueAt, n) + minutes * 60e3;
+        changed++;
+      }
+    }
+    return changed;
+  });
+  res.json({ ok: true, count });
 }));
 
 staff.delete('/visits/:ticket/tests/:testId', withTest((db, v, t) => {
@@ -202,6 +240,8 @@ staff.put('/settings', h(async (req, res) => {
     s.qrSeconds = num(b.qrSeconds, 5, 120, s.qrSeconds);
     s.readyDisplayMinutes = num(b.readyDisplayMinutes, 1, 240, s.readyDisplayMinutes);
     s.purgeHours = num(b.purgeHours, 1, 72, s.purgeHours);
+    s.warnMinutes = num(b.warnMinutes, 1, 120, s.warnMinutes);
+    s.alertSeconds = num(b.alertSeconds, 2, 60, s.alertSeconds);
   });
   res.json({ ok: true });
 }));

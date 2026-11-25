@@ -2,7 +2,7 @@
 
 An anonymous waiting-time board for the lab reception TV.
 
-When a patient chooses to wait for results, staff register them here. The system gives them a short anonymous ID (for example `E3KN`). No name or hospital number is stored. The TV shows one line for each test: the ID, the test and the time left. The list scrolls, then a QR code screen appears, then the list starts again from the top. Patients can scan the QR code and enter their ID to follow all their tests on their phone, even if they leave the waiting area.
+When a patient chooses to wait for results, staff register them here. The system gives them a short anonymous ID (for example `E3KN`). Staff can also record the patient's PID and phone number. These are shown only on the staff and lab pages, never on the TV or the patient's page, and are deleted with the entry. The TV shows one line for each test: the ID, the test and the time left. The list scrolls, then a QR code screen appears, then the list starts again from the top. Patients can scan the QR code and enter their ID to follow all their tests on their phone, even if they leave the waiting area.
 
 | TV display | Patient phone | Staff: ID slip |
 |---|---|---|
@@ -13,7 +13,8 @@ When a patient chooses to wait for results, staff register them here. The system
 | URL | Who uses it |
 |---|---|
 | `/display` | The TV. Open it full screen (F11) in a browser. |
-| `/staff` | Lab staff, behind a PIN: register patients, mark tests ready, edit turnaround times and settings. |
+| `/staff` | Reception, behind a PIN: register patients (tests, PID, phone), edit turnaround times, settings and stats. |
+| `/lab` | Lab scientists, behind the same PIN: tests sorted by time left, an alarm before time is up, and delays. |
 | `/t` or `/t/<ID>` | Patients, from the QR code. |
 
 ## How it works
@@ -21,6 +22,9 @@ When a patient chooses to wait for results, staff register them here. The system
 - **Registration:** staff pick the tests. Each test gets a countdown based on its default turnaround time (TAT), which is set in *Tests & turnaround*. The TATs included are placeholders, so the lab should set its own.
 - **The system works off the turnaround time:** each test counts down and turns **Ready ✓** by itself when its time is up. When a test becomes ready, the TV shows a big green "Results ready" banner with the ID and test, plays a chime, and the row flashes for 2 minutes. A patient's phone page also chimes and vibrates if it is open.
 - **Staff corrections:** **+15m** when a result is delayed, **Ready now** when it's out early, add or remove a test, remove the patient, and reprint the slip.
+- **Lab bench view (`/lab`):** tests in progress, soonest due first, with PID and phone. When a test has **10 minutes left** (configurable), the page beeps for ~10 seconds, shows a red banner and sends a desktop notification. This works even when the tab is in the background. Click **Turn on alerts** once after opening the page. Staff can delay one test (+15/+30), one patient, **every test of one type** (e.g. all FBC +30), or **all tests in progress**.
+
+  ![](docs/lab.png)
 - **Daily stats:** patients who waited, tests per day, the average actual wait compared with the set turnaround time, and the number of delayed/early tests. Only counts are stored, never patient data.
 - **Automatic cleanup:** ready tests leave the TV after 30 minutes. Every entry is deleted 12 hours after registration. Both times can be changed in Settings.
 - **Updates:** countdowns run on each screen. Screens check for staff changes every 10–15 seconds.

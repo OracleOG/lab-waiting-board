@@ -89,13 +89,18 @@
   <header>
     <h1 id="title">Waiting board · Staff</h1>
     <nav><button data-tab="queue" class="on">Waiting list</button><button data-tab="tests">Tests &amp; turnaround</button><button data-tab="stats">Daily stats</button><button data-tab="settings">Settings</button></nav>
+    <a href="/lab" style="color:var(--accent);font-weight:600">Lab bench view →</a>
     <button class="small" id="logout">Sign out</button>
   </header>
   <main>
     <section data-panel="queue" class="grid">
       <div class="panel">
         <h2>Register a waiting patient</h2>
-        <p class="hint">Only for patients who opt in to wait. Do not enter names or hospital numbers. The system gives them an anonymous ID.</p>
+        <p class="hint">Only for patients who opt in to wait. The system gives them an anonymous ID. PID and phone are seen only by staff, never on the TV or the patient's page, and are deleted with the entry.</p>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+          <input id="regPid" placeholder="PID (patient ID no.)" autocomplete="off">
+          <input id="regPhone" type="tel" placeholder="Phone number" autocomplete="off">
+        </div>
         <input id="search" placeholder="Search tests…" autocomplete="off">
         <div class="chips" id="chips"></div>
         <div class="selected" id="selected">No tests selected</div>
@@ -139,6 +144,8 @@
         <div class="form-row"><label>Minutes a ready test stays on the TV</label><input name="readyDisplayMinutes" type="number" min="1" max="240"></div>
         <div class="form-row"><label style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="sound" style="width:auto"> Chime on the TV when a result becomes ready</label><span class="hint">Browsers only allow sound after someone presses a key or clicks on the TV page once. A TV remote's OK button counts.</span></div>
         <div class="form-row"><label>Timezone (for daily stats)</label><input name="timezone" placeholder="Africa/Lagos"></div>
+        <div class="form-row"><label>Lab bench view: alert when this many minutes are left</label><input name="warnMinutes" type="number" min="1" max="120"></div>
+        <div class="form-row"><label>Lab bench view: beep for this many seconds</label><input name="alertSeconds" type="number" min="2" max="60"></div>
         <div class="form-row"><label>Delete every entry this many hours after registration</label><input name="purgeHours" type="number" min="1" max="72"></div>
         <button class="primary">Save settings</button> <span id="savedMsg" class="hint"></span>
       </form>
@@ -232,8 +239,8 @@ $('search').onkeydown = (e) => {
 $('register').onclick = async () => {
   $('register').disabled = true;
   try {
-    const r = await api('POST', '/api/staff/visits', { catalogIds: [...picked] });
-    picked.clear(); $('search').value = ''; $('regErr').textContent = '';
+    const r = await api('POST', '/api/staff/visits', { catalogIds: [...picked], pid: $('regPid').value, phone: $('regPhone').value });
+    picked.clear(); $('search').value = ''; $('regPid').value = ''; $('regPhone').value = ''; $('regErr').textContent = '';
     $('slipLab').textContent = state.settings.labName;
     $('slipTicket').textContent = r.ticket;
     $('slipTests').innerHTML = r.tests.map((t) => `<li><span>${esc(t.code)}</span><span>about ${fmtClock(t.dueAt)}</span></li>`).join('');
@@ -248,7 +255,7 @@ function renderVisits() {
   const vs = [...state.visits].sort((a, b) => b.createdAt - a.createdAt);
   $('count').textContent = vs.length ? `(${vs.length})` : '';
   $('visits').innerHTML = vs.length ? vs.map((v) => `<div class="visit">
-    <div class="visit-head"><span class="ticket">${esc(v.ticket)}</span><span class="muted">registered ${fmtClock(v.createdAt)}</span>
+    <div class="visit-head"><span class="ticket">${esc(v.ticket)}</span><span class="muted">${v.pid ? 'PID <b>' + esc(v.pid) + '</b> · ' : ''}${v.phone ? `<a href="tel:${esc(v.phone.replace(/[^\d+]/g, ''))}">${esc(v.phone)}</a> · ` : ''}registered ${fmtClock(v.createdAt)}</span>
       <button class="small" data-act="add" data-t="${v.ticket}">+ Test</button>
       <button class="small" data-act="slip" data-t="${v.ticket}">Slip</button>
       <button class="small danger" data-act="remove" data-t="${v.ticket}">Remove</button></div>
